@@ -140,6 +140,7 @@ export_presets.cfg
 
 # Cmake
 cmake-build-debug/
+cmake-build-debug-event-trace/
 CMakeLists.txt
 
 # Scons

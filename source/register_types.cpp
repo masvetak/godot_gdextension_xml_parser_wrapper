@@ -6,7 +6,6 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "xml_document.hpp"
 #include "xml_parser_wrapper.hpp"
 
 using namespace godot;

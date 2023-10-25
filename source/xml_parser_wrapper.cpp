@@ -23,18 +23,18 @@ XMLParserWrapper *XMLParserWrapper::get_singleton() {
 Dictionary XMLParserWrapper::parse_file(const String& path) {
     Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
     PackedByteArray xml = file->get_as_text().to_utf8_buffer();
-    XMLDocument doc = m_parse(xml);
-    return doc.to_dict();
+    Dictionary result = _parse(xml);
+    return this->_to_dict(result);
 }
 
 Dictionary XMLParserWrapper::parse_string(const String& xml) {
-    XMLDocument doc = m_parse(xml.to_utf8_buffer());
-    return doc.to_dict();
+    Dictionary result = _parse(xml.to_utf8_buffer());
+    return this->_to_dict(result);
 }
 
 Dictionary XMLParserWrapper::parse_buffer(const PackedByteArray& xml) {
-    XMLDocument doc = m_parse(xml);
-    return doc.to_dict();
+    Dictionary result = _parse(xml);
+    return this->_to_dict(result);
 }
 
 void XMLParserWrapper::_bind_methods() {
@@ -45,25 +45,27 @@ void XMLParserWrapper::_bind_methods() {
 
 XMLParserWrapper *XMLParserWrapper::xmlParserWrapper = nullptr;
 
-XMLDocument XMLParserWrapper::m_parse(const PackedByteArray& xml) {
-    XMLDocument doc;
+Dictionary XMLParserWrapper::_parse(const PackedByteArray& xml) {
     Array queue = Array();
 
-    XMLParser parser;
-    parser.open_buffer(xml);
+    Dictionary result = Dictionary();
 
-    while (parser.read() != ERR_FILE_EOF) {
-        Variant node = m_make_node(queue, parser);
+    Ref<XMLParser> parser;
+    parser.instantiate();
+    parser->open_buffer(xml);
+
+    while (parser->read() != ERR_FILE_EOF) {
+        Variant node = _make_node(parser, queue);
 
         if (!node) {
             continue;
         }
 
         if (queue.size() == 0) {
-            doc.root = node;
+            result = node;
             queue.append(node);
         } else {
-            int node_type = parser.get_node_type();
+            int node_type = parser->get_node_type();
 
             if (node_type == XMLParser::NODE_TEXT) {
                 continue;
@@ -80,19 +82,19 @@ XMLDocument XMLParserWrapper::m_parse(const PackedByteArray& xml) {
         }
     }
 
-    return doc;
+    return result;
 }
 
-Variant XMLParserWrapper::m_make_node(Array &queue, XMLParser parser) {
-    int node_type = parser.get_node_type();
+Variant XMLParserWrapper::_make_node(const Ref<XMLParser>& parser, Array &queue) {
+    int node_type = parser->get_node_type();
     switch (node_type) {
         case XMLParser::NODE_ELEMENT: {
             Dictionary node = Dictionary();
 
-            node["name"] = parser.get_node_name();
-            node["attributes"] = m_get_attributes(parser);
+            node["name"] = parser->get_node_name();
+            node["attributes"] = _get_attributes(parser);
             node["content"] = "";
-            node["standalone"] = parser.is_empty();
+            node["standalone"] = parser->is_empty();
             node["children"] = Array();
 
             return node;
@@ -100,7 +102,7 @@ Variant XMLParserWrapper::m_make_node(Array &queue, XMLParser parser) {
         case XMLParser::NODE_ELEMENT_END: {
             Dictionary node = Dictionary();
 
-            node["name"] = parser.get_node_name();
+            node["name"] = parser->get_node_name();
             node["attributes"] = Dictionary();
             node["content"] = "";
             node["standalone"] = false;
@@ -111,7 +113,7 @@ Variant XMLParserWrapper::m_make_node(Array &queue, XMLParser parser) {
         case XMLParser::NODE_TEXT: {
             Dictionary node = queue.back().operator Dictionary();
             if (node["content"].operator String().is_empty()) {
-                node["content"] = parser.get_node_data().strip_edges().lstrip(" ").rstrip(" ");
+                node["content"] = parser->get_node_data().strip_edges().lstrip(" ").rstrip(" ");
             }
             return Variant::NIL;
         }
@@ -121,12 +123,62 @@ Variant XMLParserWrapper::m_make_node(Array &queue, XMLParser parser) {
     }
 }
 
-Dictionary XMLParserWrapper::m_get_attributes(const XMLParser& parser) {
+Dictionary XMLParserWrapper::_get_attributes(const Ref<XMLParser>& parser) {
     Dictionary attributes = Dictionary();
-    int attributes_count = parser.get_attribute_count();
+    int attributes_count = parser->get_attribute_count();
 
     for (int attribute_idx = 0; attribute_idx < attributes_count; attribute_idx++) {
-        attributes[parser.get_attribute_name(attribute_idx)] = parser.get_attribute_value(attribute_idx);
+        attributes[parser->get_attribute_name(attribute_idx)] = parser->get_attribute_value(attribute_idx);
     }
     return attributes;
+}
+
+Dictionary XMLParserWrapper::_to_dict(Dictionary node, bool include_empty_fields, const String& node_content_field_name) {
+    Dictionary data = Dictionary();
+
+    if (include_empty_fields) {
+        data = _to_dict_all_fields(node);
+        data["children"] = Array();
+    } else {
+        data = _to_dict_least_fields(node);
+    }
+
+    data[node_content_field_name] = node["content"];
+
+    for (int child_idx = 0; child_idx < node["children"].operator Array().size(); child_idx++) {
+        Dictionary child = node["children"].operator Array()[child_idx];
+        if (!data.has("children")) {
+            data["children"] = Array();
+        }
+
+        data["children"].operator Array().append(_to_dict(child));
+    }
+
+    return data;
+}
+
+Dictionary XMLParserWrapper::_to_dict_all_fields(Dictionary node) {
+    Dictionary data = Dictionary();
+
+    data["name"] = node["name"];
+    data["attributes"] = node["attributes"];
+    data["standalone"] = node["standalone"];
+
+    return data;
+}
+
+Dictionary XMLParserWrapper::_to_dict_least_fields(Dictionary node) {
+    Dictionary data = Dictionary();
+
+    if (!node["name"].operator String().is_empty()) {
+        data["name"] = node["name"];
+    }
+
+    if (!node["attributes"].operator Dictionary().is_empty()) {
+        data["attributes"] = node["attributes"];
+    }
+
+    data["standalone"] = node["standalone"];
+
+    return data;
 }

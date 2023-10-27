@@ -3,10 +3,21 @@
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/xml_parser.hpp>
+#include <vector>
+
+using namespace std;
 
 namespace godot {
     class XMLParserWrapper : public RefCounted {
         GDCLASS(XMLParserWrapper, RefCounted)
+
+        typedef struct xml_node_t {
+            String name = "";
+            Dictionary attributes = Dictionary();
+            String content = "";
+            bool standalone = false;
+            vector<xml_node_t> children = vector<xml_node_t>();
+        } xml_node_t;
 
     public:
         XMLParserWrapper();
@@ -16,7 +27,6 @@ namespace godot {
 
         Dictionary parse_file(const String& path);
         Dictionary parse_string(const String& xml);
-        Dictionary parse_buffer(const PackedByteArray& xml);
 
     protected:
         static void _bind_methods();
@@ -24,13 +34,12 @@ namespace godot {
     private:
         static XMLParserWrapper *xmlParserWrapper;
 
-        static Dictionary _parse(const PackedByteArray& xml);
-        static Variant _make_node(const Ref<XMLParser>& parser, Array &queue);
+        Dictionary _parse(const PackedByteArray& xml);
         static Dictionary _get_attributes(const Ref<XMLParser>& parser);
 
-        Dictionary _to_dict(Dictionary node, bool include_empty_fields = false, const String& node_content_field_name = "__content__");
-        static Dictionary _to_dict_all_fields(Dictionary node);
-        static Dictionary _to_dict_least_fields(Dictionary node);
+        Dictionary _to_dict(const xml_node_t& node, bool include_empty_fields = false, const String& node_content_field_name = "__content__");
+        static Dictionary _to_dict_all_fields(const xml_node_t& node);
+        static Dictionary _to_dict_least_fields(const xml_node_t& node);
     };
 }
 
